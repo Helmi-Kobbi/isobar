@@ -165,6 +165,12 @@ class Timeline:
         .track property that can be used to identify the track that the event occurred on.
         """
 
+        self.on_exception_callback: Optional[Callable] = None
+        """
+        Optional callback to trigger each time an exception is raised during event processing.
+        Receives args: (exception, traceback)
+        """
+
         self.events_in_last_second: int = 0
         self.events_per_second: float = 0.0
         def _measure_events_per_second():
@@ -381,8 +387,12 @@ class Timeline:
             try:
                 track.tick()
             except Exception as e:
-                if self.ignore_exceptions:
-                    tb = traceback.format_exc()
+                tb = traceback.format_exc()
+
+                if self.on_exception_callback:
+                    self.on_exception_callback(e, tb)
+
+                if self.ignore_exceptions:    
                     logger.warning("*** Exception in track: %s" % tb)
                     # TODO: Possibly don't remove tracks specifically for the case in which SignalFlow
                     # throws a CPU exception? Generally, tracks should be stopped to prevent runaway repeats
@@ -817,7 +827,8 @@ class Timeline:
                                 curve=curve,
                                 boundaries=boundaries,
                                 default_duration=default_duration)
-        self.automations.append(automation)
+        if automation not in self.automations:
+            self.automations.append(automation)
         return automation
 
     def get_track(self, track_id: Union[int, str]) -> Optional[Track]:
