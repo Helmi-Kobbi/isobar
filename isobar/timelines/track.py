@@ -87,8 +87,8 @@ class Track:
 
         self.looping_regions: list[LoopingRegion] = []
 
-        self.quantize_grid: Optional[float] = None
-        self.quantize_level: Optional[float] = None
+        self.quantize_grid: Optional[float] = 0.0
+        self.quantize_level: Optional[float] = 0.0
 
         self.defaults = EventDefaults(fallback_to=timeline.defaults)
 
@@ -873,7 +873,7 @@ class Track:
         Returns:
             The quantized time, in beats.
         """
-        if self.quantize_grid is None or self.quantize_level is None:
+        if self.quantize_grid is None or self.quantize_level is None or self.quantize_grid == 0.0 or self.quantize_level == 0.0:
             return time
         
         grid = self.quantize_grid
@@ -892,6 +892,9 @@ class Track:
         #--------------------------------------------------------------------------------
         if self._monitor:
             self.output_device.note_on(note.pitch, note.velocity, note.channel)
+
+        if not self.timeline.is_running:
+            return
         
         if self._is_recording:
             self._recording_notes[note.pitch] = (self.current_time, note.velocity, note.channel)
@@ -902,6 +905,9 @@ class Track:
 
         if self._monitor:
             self.output_device.note_off(note.pitch, note.channel)
+
+        if not self.timeline.is_running:
+            return
 
         if note.pitch in self._recording_notes:
             start_time, velocity, channel = self._recording_notes.pop(note.pitch)
