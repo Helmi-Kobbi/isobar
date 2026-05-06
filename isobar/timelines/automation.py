@@ -11,6 +11,7 @@ from ..util import scale_lin_lin
 import itertools
 import logging
 import numpy as np
+import copy
 import math
 import time
 
@@ -53,8 +54,9 @@ class AutomationEnvelope:
         self.current_tick = 0
         self.is_finished = False
         if curve == "linear":
-            self.envelope[0:envelope_ticks] = np.linspace(0, 1, envelope_ticks)
-            self.envelope[-envelope_ticks:] = np.linspace(1, 0, envelope_ticks)
+            if envelope_ticks > 0:
+                self.envelope[0:envelope_ticks] = np.linspace(0, 1, envelope_ticks)
+                self.envelope[-envelope_ticks:] = np.linspace(1, 0, envelope_ticks)
             # normalise envelope so that, when applied to a curve, the total
             # magnitude of the curve does not change.
             mean_value_per_tick = np.sum(self.envelope) / (len(self.envelope) if len(self.envelope) else 1)
@@ -141,6 +143,9 @@ class Automation:
         self.bindings: list[Binding] = []
         self.modulations: list[AutomationModulation] = []
 
+        if self.timeline is not None:
+            self.timeline.automations.append(self)
+
     def __str__(self):
         return "Automation (range=%s, curve=%.2f)" % (str(self.range), str(self.curve))
     
@@ -172,7 +177,7 @@ class Automation:
         """
         Step forward one tick.
         """
-        
+
         previous_value = self.current_value
         self.current_time += self.tick_duration
         new_value = self.current_value
@@ -182,6 +187,7 @@ class Automation:
             if modulation.is_finished:
                 self.modulations.remove(modulation)
 
+        # print("Automation tick: current_time=%.2f, previous_value=%.2f, new_value=%.2f" % (self.current_time, previous_value, new_value))
         # Only send an update if the value has changed
         if new_value != previous_value:
             self.jump_to(new_value)
@@ -194,7 +200,7 @@ class Automation:
     def stop(self):
         self.timeline.remove_automation(self)
 
-    def move_to(self, value: float, duration: float = None, envelope: float = 0.5, blocking: bool = False):
+    def move_to(self, value: float, duration: float = None, envelope: float = 0.0, blocking: bool = False):
         # TODO: This`` prevents multiple move_bys, but is needed so that each Arc move_to
         # update action overwrites the previous. Need to think through this.
         self.modulations.clear()
@@ -203,7 +209,7 @@ class Automation:
         if blocking:
             time.sleep(duration)
     
-    def bounce_to(self, value: float, duration: float = None, envelope: float = 0.5):
+    def bounce_to(self, value: float, duration: float = None, envelope: float = 0.0):
         if duration is None:
             duration = self.default_duration
         self.modulations.clear()
@@ -225,7 +231,7 @@ class Automation:
         self.modulations.append(modulation)
 
     
-    def move_by(self, value: float, duration: float = None, envelope: float = 0.5):
+    def move_by(self, value: float, duration: float = None, envelope: float = 0.0):
         if duration is None:
             duration = self.default_duration
 
@@ -256,7 +262,7 @@ class Automation:
         self.value_changed_callbacks.remove(callback)
 
     def bind_to(self, object: Any, property_name: str, mode: str = "auto", method_argument: str = "value", **kwargs):
-        binding = Binding(object, property_name, mode, kwargs)
+        binding = Binding(object, property_name, mode, copy.copy(kwargs))
         self.bindings.append(binding)
 
         # Initialise each binding to the automation's initial value,
